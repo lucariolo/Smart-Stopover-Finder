@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: smart-stopover-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: DB_PATH
+        value: smart_stopover.db
+      - key: FRONTEND_ORIGINS
+        value: "*"
+      - key: SERPAPI_API_KEY
+        sync: false

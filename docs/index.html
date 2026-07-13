@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Stopover Flight Finder</title>
+  <meta name="description" content="Find cheaper flight itineraries through intentional stopovers using route graph pruning and live flight prices." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <nav class="topbar" aria-label="Top navigation">
+        <div class="brand-mark">SS</div>
+        <div>
+          <p class="eyebrow">Smart Stopover</p>
+          <h1>Find cheaper flights through intentional stopovers.</h1>
+        </div>
+      </nav>
+      <p class="hero-copy">
+        Enter your trip constraints. The system prunes thousands of A → B → C combinations, checks live prices only where it matters, and returns compatible itineraries ranked by savings and stopover quality.
+      </p>
+      <div class="hero-stats" aria-label="Feature highlights">
+        <span>Multi airport search</span>
+        <span>48h cache</span>
+        <span>SerpApi Google Flights</span>
+        <span>SQLite route graph</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel search-panel" aria-labelledby="search-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Search</p>
+            <h2 id="search-title">Trip details</h2>
+          </div>
+          <button id="healthCheckButton" class="ghost-button" type="button">Check backend</button>
+        </div>
+
+        <form id="searchForm" class="search-form">
+          <div class="form-grid two">
+            <label class="field">
+              <span>Departure airports</span>
+              <input id="departureAirports" type="text" value="BGY, MXP, LIN" placeholder="BGY, MXP, LIN" required />
+              <small>Comma separated IATA codes.</small>
+            </label>
+            <label class="field">
+              <span>Destination airports</span>
+              <input id="destinationAirports" type="text" value="IST, SAW" placeholder="IST, SAW" required />
+              <small>Final destination airports, not stopovers.</small>
+            </label>
+          </div>
+
+          <div class="form-grid three">
+            <label class="field">
+              <span>Earliest departure</span>
+              <input id="earliestDepartureDate" type="date" required />
+            </label>
+            <label class="field">
+              <span>Max trip days</span>
+              <input id="maxTripDays" type="number" min="1" max="60" value="7" required />
+            </label>
+            <label class="field">
+              <span>Average direct price</span>
+              <input id="averageDirectPrice" type="number" min="1" step="1" value="120" required />
+            </label>
+          </div>
+
+          <div class="form-grid three">
+            <label class="field">
+              <span>Min destination hours*</span>
+              <input id="minDestinationHours" type="number" min="0" step="1" value="96" required />
+            </label>
+            <label class="field">
+              <span>Min stopover hours</span>
+              <input id="minStopoverHours" type="number" min="0" step="1" value="12" required />
+            </label>
+            <label class="field">
+              <span>Currency</span>
+              <select id="currency">
+                <option value="EUR" selected>EUR</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+              </select>
+            </label>
+          </div>
+
+
+          <label class="field">
+            <span>SerpApi key</span>
+            <input id="serpapiApiKey" type="password" autocomplete="off" placeholder="Optional if the backend already has SERPAPI_API_KEY configured" />
+            <small>The key is sent to the backend for this request only. It is not saved by the app.</small>
+          </label>
+
+
+          <details class="advanced-box">
+            <summary>Advanced pruning settings</summary>
+            <p class="advanced-note">These settings control how deep the live search goes and how many real API calls the backend is allowed to use. The default values match the full search configuration used in the working test.</p>
+            <div class="form-grid three advanced-grid">
+              <label class="field">
+                <span>Total API budget</span>
+                <input id="totalApiBudget" type="number" min="0" value="250" />
+                <small>Maximum number of real API calls for the whole search.</small>
+              </label>
+              <label class="field">
+                <span>B → C API budget</span>
+                <input id="bcApiBudget" type="number" min="0" value="150" />
+                <small>Calls reserved for stopover → destination validation.</small>
+              </label>
+              <label class="field">
+                <span>A → B API budget</span>
+                <input id="abApiBudget" type="number" min="0" value="100" />
+                <small>Calls reserved for departure → stopover validation.</small>
+              </label>
+              <label class="field">
+                <span>Top B for B → C</span>
+                <input id="topBForBcApi" type="number" min="1" value="35" />
+                <small>How many offline stopover candidates are tested first.</small>
+              </label>
+              <label class="field">
+                <span>Top B after B → C</span>
+                <input id="topBAfterBcForAbApi" type="number" min="1" value="30" />
+                <small>How many stopovers continue after live B → C results.</small>
+              </label>
+              <label class="field">
+                <span>Top B → C anchors</span>
+                <input id="topBcFlightsPerBcPair" type="number" min="1" value="3" />
+                <small>How many B → C flights per pair are used as A → B anchors.</small>
+              </label>
+              <label class="field">
+                <span>Cache TTL hours</span>
+                <input id="cacheTtlHours" type="number" min="1" value="48" />
+                <small>How long repeated searches can reuse cached API results.</small>
+              </label>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button id="submitButton" type="submit" class="primary-button">Start search</button>
+            <button id="demoButton" type="button" class="secondary-button">Load demo results</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="panel status-panel" aria-labelledby="status-title">
+        <div class="panel-heading compact">
+          <div>
+            <p class="eyebrow">Run status</p>
+            <h2 id="status-title">Output</h2>
+          </div>
+        </div>
+        <div id="statusBox" class="status-box idle">
+          Ready. Fill the form and start a search.
+        </div>
+        <div id="summaryBox" class="summary-grid"></div>
+        <div id="confirmationBox" class="confirmation-box hidden"></div>
+      </aside>
+    </main>
+
+    <section class="results-section" aria-labelledby="results-title">
+      <div class="section-title-row">
+        <div>
+          <p class="eyebrow">Results</p>
+          <h2 id="results-title">Best itineraries</h2>
+        </div>
+        <div id="resultCount" class="result-count">0 results</div>
+      </div>
+      <div id="resultsContainer" class="results-container empty-state">
+        Results will appear here after the search.
+      </div>
+    </section>
+
+    <footer class="fine-print">
+      * The backend applies a hidden 6-hour tolerance to the minimum destination time, so strong itineraries are not discarded for small timing differences.
+    </footer>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
